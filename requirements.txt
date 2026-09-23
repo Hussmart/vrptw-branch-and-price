@@ -1,0 +1,13 @@
+# Core solver -- free, no license required.
+numpy>=1.23
+scipy>=1.9
+
+# Optional: route/convergence plots (vrptw-cg --plot).
+matplotlib>=3.6
+
+# Optional: run tests.
+pytest>=7.0
+
+# Optional, NOT required by default: only if you have a Gurobi license and
+# want to cross-check the master problem with backend="gurobi".
+# gurobipy>=9.0

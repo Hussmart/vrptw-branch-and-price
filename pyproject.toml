@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vrptw-branch-and-price"
+version = "0.2.0"
+description = "Exact Branch-and-Price solver for the Vehicle Routing Problem with Time Windows"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=1.23",
+    "scipy>=1.9",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.6"]
+gurobi = ["gurobipy>=9.0"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+vrptw-cg = "vrptw_cg.cli:run"
+vrptw-cg-benchmark = "vrptw_cg.benchmark:main"
+
+[tool.setuptools.packages.find]
+include = ["vrptw_cg*"]

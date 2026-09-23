@@ -1,0 +1,56 @@
+{
+  "instance": "r201",
+  "customers": 25,
+  "backend": "highs",
+  "status": "optimal",
+  "cost": 462.0,
+  "lower_bound": 462.0,
+  "gap_percent": 0.0,
+  "vehicles_used": 4,
+  "routes": [
+    [
+      0,
+      12,
+      9,
+      3,
+      20,
+      10,
+      1,
+      26
+    ],
+    [
+      0,
+      5,
+      19,
+      11,
+      7,
+      8,
+      18,
+      6,
+      26
+    ],
+    [
+      0,
+      21,
+      23,
+      22,
+      4,
+      25,
+      24,
+      26
+    ],
+    [
+      0,
+      2,
+      15,
+      14,
+      16,
+      17,
+      13,
+      26
+    ]
+  ],
+  "nodes_explored": 3,
+  "columns_generated": 931,
+  "elapsed_seconds": 29.040276527404785
+}

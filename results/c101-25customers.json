@@ -1,0 +1,52 @@
+{
+  "instance": "c101",
+  "customers": 25,
+  "backend": "highs",
+  "status": "optimal",
+  "cost": 192.0,
+  "lower_bound": 192.0,
+  "gap_percent": 0.0,
+  "vehicles_used": 3,
+  "routes": [
+    [
+      0,
+      20,
+      24,
+      25,
+      23,
+      22,
+      21,
+      26
+    ],
+    [
+      0,
+      13,
+      17,
+      18,
+      19,
+      15,
+      16,
+      14,
+      12,
+      26
+    ],
+    [
+      0,
+      5,
+      3,
+      7,
+      8,
+      10,
+      11,
+      9,
+      6,
+      4,
+      2,
+      1,
+      26
+    ]
+  ],
+  "nodes_explored": 1,
+  "columns_generated": 2144,
+  "elapsed_seconds": 26.247720956802368
+}
