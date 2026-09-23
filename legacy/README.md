@@ -19,5 +19,9 @@ It is **not used** by the new solver. In particular:
 * The master problem never enforces the fleet-size constraint
   (`vehicleNumber` is accepted but unused in `createMasterProblem`).
 
+`results/` and `routes/` in this folder are the original run outputs
+produced by `col-gen-vrptw.py` (kept for reference, not regenerated). The
+new solver writes its own output to the top-level `../results/`.
+
 See `../GAP_ANALYSIS_AND_ROADMAP.md` for the full analysis and
 `../docs/REPORT.md` for how `vrptw_cg/` addresses each point.

@@ -80,7 +80,7 @@ Batch benchmark across the Solomon suite:
 python -m vrptw_cg.benchmark --instances c101 r101 rc101 --customer-counts 10 25
 ```
 
-Run the test suite (30+ tests, ~2 minutes including the end-to-end
+Run the test suite (31 tests, ~10 seconds, including the end-to-end
 brute-force validation):
 
 ```bash
@@ -126,6 +126,25 @@ always re-tried before declaring convergence. That fallback is what keeps
 this a pure acceleration with zero effect on the final answer --
 `test_stabilization_does_not_change_the_optimal_answer` checks exactly that.
 
+## Results
+
+Both objectives solve to a **certified optimum** (proven lower bound equals
+the reported cost, `gap_percent = 0.000%`) on all 12 tested Solomon
+instances spanning all three classes (clustered `c`, random `r`, mixed `rc`)
+and both time-window widths ("1" narrow, "2" wide):
+
+| objective | instances solved to certified optimum | full data |
+|---|---|---|
+| `distance` | 12 / 12 | [`results/benchmark.csv`](results/benchmark.csv) |
+| `vehicles-then-distance` | 12 / 12 | [`results/benchmark-lexicographic.csv`](results/benchmark-lexicographic.csv) |
+
+The two objectives are not interchangeable: on `c201`/25 customers,
+minimizing distance alone uses 2 vehicles for a cost of 217.00, while the
+literature-standard lexicographic objective is forced to 1 vehicle at a
+*higher* cost of 297.00 -- see `docs/REPORT.md` Section 9 for the full
+comparison and discussion, including the one case (`rc201`/25, 671.7s) where
+proving the minimum feasible fleet size was the computational bottleneck.
+
 ## Why this is different from the original project
 
 | | `legacy/` (original) | `vrptw_cg/` (this fork) |
@@ -138,7 +157,7 @@ this a pure acceleration with zero effect on the final answer --
 | Solver | Gurobi only (license required) | Free HiGHS backend by default; Gurobi optional |
 | Interface | Interactive `input()`, one instance at a time | CLI + batch benchmark script |
 | Visualization | None (a TODO in the original code) | Route maps and convergence plots |
-| Tests | None | 30+ unit tests + independent brute-force validation + CI |
+| Tests | None | 31 unit tests + independent brute-force validation + CI |
 
 ## Solver architecture
 
@@ -182,8 +201,8 @@ practice and the current open-source state of the art.
   generation", *Discrete Mathematics*, 1999.
 * R. Sadykov, E. Uchoa, A. Pessoa, "A Bucket Graph Based Labeling Algorithm
   with Application to Vehicle Routing", *Transportation Science*, 2021.
-* W. Kool et al. / PyVRP contributors, "PyVRP: A High-Performance VRP Solver
-  Package", *INFORMS Journal on Computing*, 2024.
+* N. A. Wouda, L. Lan, W. Kool, "PyVRP: A High-Performance VRP Solver
+  Package", *INFORMS Journal on Computing*, 36(4), 943-955, 2024.
 * G. Ioannou, M. Kritikos, G. Prastacos, "A greedy look-ahead heuristic for
   the vehicle routing problem", *JORS*, 2001 (the IMPACT heuristic used to
   seed the root node).

@@ -188,11 +188,15 @@ producing a wrong "optimal" answer. See `tests/test_master.py`.
 
 **Fleet-size window.** Vehicle-count branching needs both a lower and an
 upper bound on `sum(y_r)`, entered into `linprog` as two separate `<=` rows
-(SciPy has no native `>=`). The reduced-cost contribution of each row is
-computed generically as `-marginal * coefficient-as-entered`, which is
-robust to the row transformation; `tests/test_master.py` checks dual
-feasibility (every column's reduced cost `>= 0` at the optimum) with both
-rows simultaneously active.
+(SciPy has no native `>=`; the lower bound is entered as `-sum(y_r) <= -lb`).
+The combined reduced-cost contribution is computed generically as
+`sum(marginal * coefficient-as-entered)` over whichever rows are active,
+using each row's coefficient exactly as it was entered into the solver
+(`+1` for the upper-bound row, `-1` for the negated lower-bound row) --
+robust to the row transformation because it never assumes a fixed sign.
+`tests/test_master.py` checks dual feasibility (every column's reduced cost
+`>= -1e-6` at the optimum) with both rows simultaneously active, which is
+the actual proof this formula is right rather than a hand-traced sign.
 
 ## 8. Validation
 
@@ -213,7 +217,7 @@ Three independent checks, beyond ordinary unit tests of individual functions:
    `stabilization_alpha=0` and `0.7` reach the identical certified optimum,
    confirming dual smoothing (Section 6) is a pure acceleration.
 
-Run `pytest` to reproduce all three (30+ tests, ~1-2 minutes).
+Run `pytest` to reproduce all three (31 tests, ~10 seconds).
 
 ## 9. Computational results
 

@@ -14,8 +14,10 @@ relaxation only) for the VRPTW using Gurobi, based on Desrochers, Desrosiers
 * [`vrptw_cg/`](vrptw_cg/) is a new implementation that reuses the same
   Solomon data format and the IMPACT heuristic idea, but adds a full
   Branch-and-Price layer (the original never branched -- see the gap
-  analysis), ng-route relaxation pricing, a free/open-source LP backend, and
-  test coverage validated against an independent brute-force oracle. See
+  analysis), ng-route relaxation pricing, Ryan-Foster branching, the
+  standard lexicographic (vehicles-then-distance) objective, dual-value
+  stabilization, a free/open-source LP backend, and test coverage validated
+  against an independent brute-force oracle. See
   [`docs/REPORT.md`](docs/REPORT.md) for the technical writeup.
 
 No code from `legacy/` is imported or executed by `vrptw_cg/`; it is kept
