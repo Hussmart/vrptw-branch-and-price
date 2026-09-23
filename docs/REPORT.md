@@ -250,6 +250,45 @@ Full raw output: `results/benchmark.csv`.
 and-price tree was fully explored and the solution is a certified integer
 optimum, not just a heuristic value.
 
+### Lexicographic objective on the same instances
+
+Generated with `python -m vrptw_cg.benchmark ... --objective vehicles-then-distance`.
+Full output: `results/benchmark-lexicographic.csv`.
+
+| instance | customers | status | distance | vehicles (K\*) | time (s) |
+|---|---|---|---|---|---|
+| c101 | 10 | optimal | 59.00 | 1 | 3.1 |
+| c101 | 25 | optimal | 192.00 | 3 | 129.0 |
+| c201 | 10 | optimal | 194.00 | 1 | 1.8 |
+| c201 | 25 | optimal | 297.00 | 1 | 145.3 |
+| r101 | 10 | optimal | 253.00 | 3 | 1.2 |
+| r101 | 25 | optimal | 580.00 | 6 | 26.0 |
+| r201 | 10 | optimal | 254.00 | 1 | 2.5 |
+| r201 | 25 | optimal | 494.00 | 2 | 173.0 |
+| rc101 | 10 | optimal | 184.00 | 2 | 1.8 |
+| rc101 | 25 | optimal | 356.00 | 3 | 9.3 |
+| rc201 | 10 | optimal | 195.00 | 1 | 7.6 |
+| rc201 | 25 | optimal | 422.00 | 2 | 671.7 |
+
+All twelve are again certified optimal (`gap_percent = 0.000%` on every row,
+omitted from the table above for space). Comparing against the
+distance-only table confirms the two objectives are genuinely different
+problems, not a rounding-level distinction:
+
+* **c201/25**: distance-only uses 2 vehicles for a total of 217.00; the
+  lexicographic optimum uses only 1 vehicle, at a *higher* distance of
+  297.00. Minimizing vehicles first can force a worse-distance solution --
+  exactly the tradeoff the two-phase objective exists to make explicit
+  rather than hide.
+* **r201/25**: distance-only uses 4 vehicles (462.00); lexicographic uses 2
+  vehicles (494.00). Same pattern.
+* **rc201/25** took 671.7s, by far the longest run in either table --
+  phase 1 (proving the *minimum feasible fleet size*, a combinatorial
+  feasibility question in its own right) is occasionally much harder than
+  minimizing distance with a generous fleet bound. This is an honest data
+  point, not smoothed over: the two-phase objective is more expensive to
+  compute exactly, not just conceptually different.
+
 ### On comparing against literature "best-known" values
 
 Classic Solomon-benchmark tables report a **lexicographic** objective

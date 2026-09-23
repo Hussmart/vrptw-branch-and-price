@@ -1,0 +1,13 @@
+instance,customers,status,cost,lower_bound,gap_percent,vehicles,nodes_explored,columns_generated,elapsed_seconds,reference_best_known,reference_gap_percent
+c101,10,optimal,59.0,59.0,0.0,1,1,78,3.1,,
+c101,25,optimal,192.0,192.0,0.0,3,1,934,129.0,,
+c201,10,optimal,194.0,194.0,0.0,1,1,126,1.8,,
+c201,25,optimal,297.0,297.0,0.0,1,1,2053,145.3,,
+r101,10,optimal,253.0,253.0,0.0,3,1,40,1.2,,
+r101,25,optimal,580.0,580.0,0.0,6,1,250,26.0,,
+r201,10,optimal,254.0,254.0,0.0,1,1,132,2.5,,
+r201,25,optimal,494.0,494.0,0.0,2,1,827,173.0,,
+rc101,10,optimal,184.0,184.0,0.0,2,1,61,1.8,,
+rc101,25,optimal,356.0,356.0,0.0,3,1,360,9.3,,
+rc201,10,optimal,195.0,195.0,0.0,1,1,139,7.6,,
+rc201,25,optimal,422.0,422.0,0.0,2,1,783,671.7,,

@@ -7,3 +7,4 @@ dist/
 .venv/
 venv/
 *.lp
+.claude/
