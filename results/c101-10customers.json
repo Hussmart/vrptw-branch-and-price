@@ -1,0 +1,30 @@
+{
+  "instance": "c101",
+  "customers": 10,
+  "backend": "highs",
+  "objective": "vehicles-then-distance",
+  "status": "optimal",
+  "cost": 59.0,
+  "lower_bound": 59.0,
+  "gap_percent": 0.0,
+  "vehicles_used": 1,
+  "routes": [
+    [
+      0,
+      5,
+      3,
+      7,
+      8,
+      10,
+      9,
+      6,
+      4,
+      2,
+      1,
+      11
+    ]
+  ],
+  "nodes_explored": 1,
+  "columns_generated": 78,
+  "elapsed_seconds": 3.0363001823425293
+}

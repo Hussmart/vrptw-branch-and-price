@@ -16,7 +16,7 @@ import csv
 import logging
 import time
 
-from .branch_and_price import BranchAndPrice
+from .branch_and_price import BranchAndPrice, solve_lexicographic
 from .data import load_instance
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -35,7 +35,8 @@ def load_reference(path: str | None):
 
 
 def run_benchmark(instances, customer_counts, backend="highs", time_limit=120.0,
-                   solomon_dir="solomon-instances", reference=None, out_csv="results/benchmark.csv"):
+                   solomon_dir="solomon-instances", reference=None, out_csv="results/benchmark.csv",
+                   objective="distance"):
     reference = reference or {}
     rows = []
     for name in instances:
@@ -46,10 +47,15 @@ def run_benchmark(instances, customer_counts, backend="highs", time_limit=120.0,
                 log.warning("Skipping %s/%d: %s", name, n, exc)
                 continue
 
-            solver = BranchAndPrice(inst, backend=backend, time_limit=time_limit)
             t0 = time.time()
-            result = solver.solve()
+            if objective == "vehicles-then-distance":
+                lex = solve_lexicographic(inst, backend=backend, time_limit=time_limit)
+                result, vehicles = lex.phase2, lex.vehicles
+            else:
+                result = BranchAndPrice(inst, backend=backend, time_limit=time_limit).solve()
+                vehicles = len(result.incumbent_routes)
             elapsed = time.time() - t0
+
             gap = ((result.incumbent_cost - result.lower_bound) / result.incumbent_cost * 100
                    if result.incumbent_cost else 0.0)
             ref_val = reference.get((name.lower(), n))
@@ -60,7 +66,7 @@ def run_benchmark(instances, customer_counts, backend="highs", time_limit=120.0,
                 "cost": round(result.incumbent_cost, 2),
                 "lower_bound": round(result.lower_bound, 2),
                 "gap_percent": round(gap, 3),
-                "vehicles": len(result.incumbent_routes),
+                "vehicles": vehicles,
                 "nodes_explored": result.stats.nodes_explored,
                 "columns_generated": result.stats.columns_generated,
                 "elapsed_seconds": round(elapsed, 1),
@@ -86,6 +92,8 @@ def build_parser():
                     default=["c101", "c201", "r101", "r201", "rc101", "rc201"])
     p.add_argument("--customer-counts", nargs="+", type=int, default=[10, 25])
     p.add_argument("--backend", choices=["highs", "gurobi"], default="highs")
+    p.add_argument("--objective", choices=["distance", "vehicles-then-distance"],
+                    default="distance")
     p.add_argument("--time-limit", type=float, default=120.0)
     p.add_argument("--solomon-dir", default="solomon-instances")
     p.add_argument("--reference-csv", default=None,
@@ -99,7 +107,7 @@ def main(argv=None):
     reference = load_reference(args.reference_csv)
     run_benchmark(args.instances, args.customer_counts, backend=args.backend,
                   time_limit=args.time_limit, solomon_dir=args.solomon_dir,
-                  reference=reference, out_csv=args.out_csv)
+                  reference=reference, out_csv=args.out_csv, objective=args.objective)
 
 
 if __name__ == "__main__":

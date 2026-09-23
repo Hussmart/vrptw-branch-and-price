@@ -1,4 +1,4 @@
-> **وضعیت:** فاز ۰ (زیرساخت آزاد از Gurobi) و فاز ۱ (Branch-and-Price کامل با ng-route pricing) پیاده‌سازی و با تست واحد + یک اوراکل brute-force مستقل اعتبارسنجی شده‌اند. کد در [`vrptw_cg/`](vrptw_cg/)، جزئیات فنی در [`docs/REPORT.md`](docs/REPORT.md)، و پیاده‌سازی اصلی (بدون تغییر) برای مقایسه در [`legacy/`](legacy/) نگه‌داری شده. ادامه‌ی این سند، همان لیست ایده‌های سطح ۲/۳/۴ برای گام بعدی است.
+> **وضعیت:** فاز ۰ (زیرساخت آزاد از Gurobi)، فاز ۱ (Branch-and-Price کامل با ng-route pricing)، و از فاز ۲: هدف دوفازی lexicographic (اول تعداد وسیله، بعد فاصله — همون objective استاندارد مقاله‌های VRPTW) و dual stabilization (du Merle et al. 1999) پیاده‌سازی و با تست واحد + اوراکل brute-force مستقل اعتبارسنجی شده‌اند. کد در [`vrptw_cg/`](vrptw_cg/)، جزئیات فنی در [`docs/REPORT.md`](docs/REPORT.md)، و پیاده‌سازی اصلی (بدون تغییر) برای مقایسه در [`legacy/`](legacy/) نگه‌داری شده. باقی‌مانده‌ی سطح ۲/۳/۴ (EVRPTW، ML-guided pricing، دمو وب) هنوز پیاده‌سازی نشده‌اند.
 
 # تحلیل گپ‌ها و نقشه‌راه توسعه پروژه VRPTW-Column-Generation
 

@@ -9,7 +9,7 @@ from itertools import permutations
 
 import pytest
 
-from vrptw_cg.branch_and_price import BranchAndPrice
+from vrptw_cg.branch_and_price import BranchAndPrice, solve_lexicographic
 from vrptw_cg.data import load_instance
 
 
@@ -43,9 +43,11 @@ def _feasible_route_cost(subset, inst):
     return best
 
 
-def bruteforce_optimal(inst):
-    """Exact bitmask-DP set-partitioning solve: ground truth, independent of
-    column generation / branch-and-price machinery entirely."""
+def _bruteforce_dp_table(inst):
+    """dp[mask][v] = min distance to cover `mask` using exactly v routes,
+    an exact bitmask DP sharing no code with column generation / branch-
+    and-price. Ground truth for both the plain-optimal and the
+    lexicographic (min vehicles, then min distance) tests below."""
     n = inst.n
     route_cost_of = {}
     for mask in range(1, 1 << n):
@@ -58,7 +60,6 @@ def bruteforce_optimal(inst):
 
     full = (1 << n) - 1
     INF = float("inf")
-    # dp[mask][v] = min cost to cover `mask` using exactly v routes
     dp = [[INF] * (inst.K + 1) for _ in range(1 << n)]
     dp[0][0] = 0.0
     for mask in range(1 << n):
@@ -74,8 +75,24 @@ def bruteforce_optimal(inst):
                     if cost < dp[new_mask][v + 1]:
                         dp[new_mask][v + 1] = cost
                 sub = (sub - 1) & remaining
-    best = min(dp[full][v] for v in range(inst.K + 1))
-    return best
+    return dp, full
+
+
+def bruteforce_optimal(inst):
+    """Minimum distance regardless of vehicle count (matches the default
+    objective="distance", fleet-size-bounded, of BranchAndPrice)."""
+    dp, full = _bruteforce_dp_table(inst)
+    return min(dp[full][v] for v in range(inst.K + 1))
+
+
+def bruteforce_lexicographic(inst):
+    """(min vehicles, then min distance among solutions using that many
+    vehicles) -- matches solve_lexicographic()."""
+    dp, full = _bruteforce_dp_table(inst)
+    for v in range(1, inst.K + 1):
+        if dp[full][v] < float("inf"):
+            return v, dp[full][v]
+    raise AssertionError("instance should be feasible")
 
 
 @pytest.mark.parametrize("instance_name,n", [("c101", 5), ("r101", 5), ("rc101", 6)])
@@ -115,3 +132,41 @@ def test_lower_bound_never_exceeds_incumbent():
     inst = load_instance("rc101", 10)
     result = BranchAndPrice(inst, time_limit=30.0, node_limit=300).solve()
     assert result.lower_bound <= result.incumbent_cost + 1e-6
+
+
+@pytest.mark.parametrize("instance_name,n", [("c101", 5), ("r101", 5), ("rc101", 6)])
+def test_lexicographic_objective_matches_bruteforce_oracle(instance_name, n):
+    """The original project only ever minimized distance and never enforced
+    the fleet-size bound at all (see GAP_ANALYSIS_AND_ROADMAP.md), so its
+    numbers cannot be compared against literature tables that use the
+    standard (min vehicles, then min distance) objective. This checks the
+    two-phase solve_lexicographic() against an independent brute-force
+    oracle that computes exactly that lexicographic optimum.
+    """
+    inst = load_instance(instance_name, n)
+    expected_vehicles, expected_distance = bruteforce_lexicographic(inst)
+
+    result = solve_lexicographic(inst, time_limit=60.0, node_limit=500)
+
+    assert result.vehicles == expected_vehicles
+    assert result.distance == pytest.approx(expected_distance, abs=1e-3)
+    covered = sorted(c for route in result.routes for c in route[1:-1])
+    assert covered == list(range(1, inst.n + 1))
+
+
+@pytest.mark.parametrize("instance_name,n", [("c101", 15), ("r101", 15), ("rc101", 15)])
+def test_stabilization_does_not_change_the_optimal_answer(instance_name, n):
+    """Dual-value smoothing is only ever an acceleration heuristic: the
+    fallback to exact duals before declaring convergence (see
+    BranchAndPrice._process_node) must make it invisible to the final
+    answer. Any alpha should reach the exact same certified optimum as no
+    stabilization at all.
+    """
+    inst = load_instance(instance_name, n)
+    baseline = BranchAndPrice(inst, time_limit=60.0, node_limit=1000,
+                               stabilization_alpha=0.0).solve()
+    stabilized = BranchAndPrice(inst, time_limit=60.0, node_limit=1000,
+                                 stabilization_alpha=0.7).solve()
+
+    assert baseline.status == stabilized.status == "optimal"
+    assert stabilized.incumbent_cost == pytest.approx(baseline.incumbent_cost, abs=1e-6)

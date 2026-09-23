@@ -33,7 +33,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from scipy.optimize import linprog
-from scipy.sparse import csr_matrix, hstack, identity, vstack
+from scipy.sparse import csr_matrix, hstack, identity
 
 
 @dataclass

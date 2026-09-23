@@ -118,7 +118,21 @@ class BPResult:
 class BranchAndPrice:
     def __init__(self, instance, backend: str = "highs", time_limit: float = 300.0,
                  node_limit: int = 3000, max_cg_iterations: int = 300,
-                 max_routes_per_pricing: int = 25, verbose: bool = False):
+                 max_routes_per_pricing: int = 25, verbose: bool = False,
+                 objective: str = "distance", stabilization_alpha: float = 0.5):
+        """
+        objective: "distance" (default) minimizes total route distance
+            subject to sum(y_r) <= K. "count" minimizes the number of
+            vehicles used (every real column costs exactly 1 regardless of
+            length) -- this is phase 1 of the standard lexicographic VRPTW
+            objective; see solve_lexicographic().
+        stabilization_alpha: dual-value smoothing weight in [0, 1) for
+            column generation (du Merle et al., 1999). 0 disables
+            stabilization and uses the plain textbook CG loop. Smoothing
+            never affects correctness: whenever the smoothed duals fail to
+            find an improving column, the exact current duals are always
+            re-tried before declaring convergence (see _process_node).
+        """
         self.inst = instance
         self.backend = backend
         self.time_limit = time_limit
@@ -126,30 +140,37 @@ class BranchAndPrice:
         self.max_cg_iterations = max_cg_iterations
         self.max_routes_per_pricing = max_routes_per_pricing
         self.verbose = verbose
+        self.objective = objective
+        self.stabilization_alpha = stabilization_alpha
         self.pool: dict[tuple, Column] = {}
         self.stats = BPStats()
+        self._pricing_arc_cost = None if objective != "count" else \
+            np.zeros_like(instance.d)
 
     # ------------------------------------------------------------------
-    def _get_or_add_column(self, route: tuple, cost: float) -> Column:
+    def _column_true_cost(self, route: tuple) -> float:
+        if self.objective == "count":
+            return 1.0
+        return route_cost(route, self.inst.d)
+
+    def _get_or_add_column(self, route: tuple) -> Column:
         existing = self.pool.get(route)
         if existing is not None:
             return existing
         incidence = np.zeros(self.inst.n)
         for node in route[1:-1]:
             incidence[node - 1] += 1
-        col = Column(route, cost, incidence)
+        col = Column(route, self._column_true_cost(route), incidence)
         self.pool[route] = col
         self.stats.columns_generated += 1
         return col
 
     def _seed_pool(self):
-        d = self.inst.d
         for i in range(1, self.inst.n + 1):
-            route = (0, i, self.inst.n + 1)
-            self._get_or_add_column(route, route_cost(route, d))
+            self._get_or_add_column((0, i, self.inst.n + 1))
         impact_routes = [tuple(r) for r in impact_construction(self.inst)]
         for r in impact_routes:
-            self._get_or_add_column(r, route_cost(r, d))
+            self._get_or_add_column(r)
         return impact_routes
 
     @staticmethod
@@ -177,6 +198,18 @@ class BranchAndPrice:
                     return False
         return True
 
+    def _price(self, node: BPNode, pi, sigma):
+        return solve_pricing(
+            self.inst, pi, sigma,
+            arc_forbidden=node.arc_forbidden,
+            arc_required_next=node.arc_required_next,
+            arc_required_prev=node.arc_required_prev,
+            pair_together=node.pair_together,
+            pair_apart=node.pair_apart,
+            arc_cost=self._pricing_arc_cost,
+            max_routes=self.max_routes_per_pricing,
+        )
+
     def _process_node(self, node: BPNode) -> NodeResult:
         mp = MasterProblem(self.inst.n, fleet_ub=node.fleet_ub,
                             fleet_lb=node.fleet_lb, backend=self.backend)
@@ -186,27 +219,49 @@ class BranchAndPrice:
 
         sol = None
         converged = False
+        stab_center_pi = None
+        stab_center_sigma = 0.0
+        alpha = self.stabilization_alpha
+
         for _ in range(self.max_cg_iterations):
             sol = mp.solve()
             if sol.status != "optimal":
                 return NodeResult(feasible=False)
             if node.depth == 0:
                 self.stats.root_iteration_bounds.append(sol.obj_value)
-            pricing = solve_pricing(
-                self.inst, sol.duals_customers, sol.dual_fleet,
-                arc_forbidden=node.arc_forbidden,
-                arc_required_next=node.arc_required_next,
-                arc_required_prev=node.arc_required_prev,
-                pair_together=node.pair_together,
-                pair_apart=node.pair_apart,
-                max_routes=self.max_routes_per_pricing,
-            )
+
+            true_pi, true_sigma = sol.duals_customers, sol.dual_fleet
+            pricing_used_true_duals = True
+            if alpha > 0 and stab_center_pi is not None:
+                smoothed_pi = alpha * stab_center_pi + (1 - alpha) * true_pi
+                smoothed_sigma = alpha * stab_center_sigma + (1 - alpha) * true_sigma
+                pricing = self._price(node, smoothed_pi, smoothed_sigma)
+                pricing_used_true_duals = False
+                if not pricing.routes:
+                    # Smoothed duals found nothing: this is NOT a valid
+                    # convergence certificate (only the true duals are the
+                    # actual dual-optimal solution of the current RMP), so
+                    # we must re-check with the exact duals before stopping.
+                    pricing = self._price(node, true_pi, true_sigma)
+                    pricing_used_true_duals = True
+            else:
+                pricing = self._price(node, true_pi, true_sigma)
+
             if not pricing.routes:
                 converged = True
                 break
+
+            # Move the stability center towards whichever duals just
+            # succeeded (standard "self-adaptive" update, du Merle et al.,
+            # 1999): a center that keeps producing improving columns is a
+            # good smoothing target; one that just failed should not be.
+            stab_center_pi = true_pi if pricing_used_true_duals else \
+                alpha * stab_center_pi + (1 - alpha) * true_pi
+            stab_center_sigma = true_sigma if pricing_used_true_duals else \
+                alpha * stab_center_sigma + (1 - alpha) * true_sigma
+
             for route in pricing.routes:
-                cost = route_cost(route, self.inst.d)
-                col = self._get_or_add_column(route, cost)
+                col = self._get_or_add_column(route)
                 mp.add_column(col.cost, col.incidence)
                 columns.append(col)
 
@@ -285,7 +340,7 @@ class BranchAndPrice:
         start_time = time.time()
         impact_routes = self._seed_pool()
         incumbent_routes = impact_routes
-        incumbent_cost = sum(route_cost(r, self.inst.d) for r in impact_routes)
+        incumbent_cost = sum(self._column_true_cost(r) for r in impact_routes)
 
         root = BPNode(0, self.inst.K, frozenset(), {}, {}, frozenset(), frozenset(), 0)
         counter = itertools.count()
@@ -347,3 +402,54 @@ class BranchAndPrice:
 
         return BPResult(status, incumbent_routes, incumbent_cost,
                          max(lower_bound, self.stats.root_lp_bound or -math.inf), self.stats)
+
+
+@dataclass
+class LexicographicResult:
+    """Result of the standard two-phase VRPTW objective: minimize the
+    number of vehicles first, then minimize distance among solutions using
+    that minimum fleet size (Solomon, 1987; used by essentially every
+    published Solomon-benchmark result table). The original project's
+    objective minimized distance only, subject to a fleet-size *bound* that
+    it never even enforced -- see GAP_ANALYSIS_AND_ROADMAP.md -- which makes
+    its numbers incomparable to literature "best known" tables that use this
+    lexicographic objective.
+    """
+    vehicles: int
+    distance: float
+    routes: list
+    phase1: BPResult
+    phase2: BPResult
+
+
+def solve_lexicographic(instance, backend: str = "highs", time_limit: float = 300.0,
+                         node_limit: int = 3000, **kwargs) -> LexicographicResult:
+    """Phase 1: minimize vehicle count (every route costs 1). Phase 2: with
+    the fleet size capped at that proven minimum, minimize distance. Each
+    phase is an independent, from-scratch Branch-and-Price solve (separate
+    column pools) so that phase 1's unit-cost columns never leak into
+    phase 2's distance-cost master -- see the ``objective`` parameter of
+    ``BranchAndPrice`` for how a single column's cost is computed.
+    """
+    phase1 = BranchAndPrice(instance, backend=backend, time_limit=time_limit,
+                             node_limit=node_limit, objective="count", **kwargs)
+    phase1_result = phase1.solve()
+    k_star = int(round(phase1_result.incumbent_cost))
+
+    restricted = replace_fleet_size(instance, k_star)
+    phase2 = BranchAndPrice(restricted, backend=backend, time_limit=time_limit,
+                             node_limit=node_limit, objective="distance", **kwargs)
+    phase2_result = phase2.solve()
+
+    return LexicographicResult(k_star, phase2_result.incumbent_cost,
+                                phase2_result.incumbent_routes, phase1_result, phase2_result)
+
+
+def replace_fleet_size(instance, k: int):
+    """Return a shallow copy of ``instance`` with its fleet size capped at
+    ``k``. Phase 2 of solve_lexicographic uses this so BranchAndPrice's root
+    node (which reads instance.K) starts already restricted to the proven
+    minimum fleet size, instead of relying on a much larger default K.
+    """
+    from dataclasses import replace as _replace
+    return _replace(instance, K=k)

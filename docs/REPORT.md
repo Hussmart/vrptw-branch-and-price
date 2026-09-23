@@ -121,7 +121,60 @@ pruning. The reported `lower_bound` is the minimum bound among unexplored
 nodes when a time/node budget is hit, giving an honest optimality gap
 instead of silently reporting a heuristic number as exact.
 
-## 5. Correctness-critical implementation details
+## 5. Two objectives: distance-only vs. the standard lexicographic objective
+
+The original repository minimized distance only, and (as noted above) never
+even enforced the fleet-size bound it accepted as a parameter. Published
+Solomon-benchmark result tables instead use a **lexicographic** objective:
+minimize the number of vehicles first, then minimize distance among
+solutions that use that minimum fleet (Solomon, 1987). Comparing a
+distance-only number against a lexicographic-optimal number is an
+apples-to-oranges mistake that is easy to make silently, so this project
+implements both explicitly and names them:
+
+* `objective="distance"` (`BranchAndPrice` default): minimize distance
+  subject to `sum(y_r) <= K`.
+* `objective="count"` + `solve_lexicographic()`: phase 1 minimizes the
+  number of vehicles by giving every real column a cost of exactly 1
+  regardless of its length (`vrptw_cg/pricing.py`'s `arc_cost` parameter
+  decouples the reduced-cost bookkeeping from the real distance matrix used
+  for capacity/time-window feasibility, so the same label-setting algorithm
+  serves both objectives). Phase 2 then re-solves from scratch with the
+  fleet size capped at the phase-1 optimum `K*` and the normal distance
+  objective. Both phases are exact Branch-and-Price runs, not heuristics.
+
+`test_lexicographic_objective_matches_bruteforce_oracle` extends the
+bitmask-DP oracle (Section 8) to also compute the true lexicographic optimum
+and checks `solve_lexicographic()` against it on small instances.
+
+## 6. Column generation acceleration: dual stabilization
+
+Plain (unstabilized) column generation is well known for "tailing-off": many
+late-stage iterations that each improve the LP bound by a negligible amount,
+because the dual values oscillate as they approach optimality. This project
+implements dual-value smoothing (du Merle, Villeneuve, Desrosiers & Hansen,
+"Stabilized column generation", *Discrete Mathematics*, 1999):
+
+1. Maintain a stability center `pi_bar` (initialized to the first duals
+   seen at a node).
+2. At each iteration, price with a blend `alpha * pi_bar + (1-alpha) * pi`
+   of the center and the current exact duals (`stabilization_alpha`,
+   default 0.5).
+3. **If pricing with the blended duals finds no improving column, this is
+   not a valid convergence certificate** -- only the true current duals are
+   the actual dual-optimal solution of the current RMP. The exact duals are
+   always re-tried before the node is allowed to declare convergence.
+4. The center is moved towards whichever duals just succeeded.
+
+Step 3 is what makes this purely an acceleration: it can only ever add one
+extra pricing call per iteration in the worst case (when the blend fails and
+the exact duals are needed anyway), never change which columns are
+considered valid or which node bound is accepted.
+`test_stabilization_does_not_change_the_optimal_answer` runs the same
+instances with `stabilization_alpha=0` and `0.7` and checks the certified
+optimum is bit-for-bit the same.
+
+## 7. Correctness-critical implementation details
 
 **Dual sign convention.** SciPy's `linprog(method="highs")` reports
 `res.eqlin.marginals` / `res.ineqlin.marginals`. These were verified
@@ -141,9 +194,9 @@ robust to the row transformation; `tests/test_master.py` checks dual
 feasibility (every column's reduced cost `>= 0` at the optimum) with both
 rows simultaneously active.
 
-## 6. Validation
+## 8. Validation
 
-Two independent checks, beyond ordinary unit tests of individual functions:
+Three independent checks, beyond ordinary unit tests of individual functions:
 
 1. **Dual feasibility** (`tests/test_master.py`): for random and
    hand-constructed column sets, every column's reduced cost is `>= -1e-6`
@@ -151,14 +204,18 @@ Two independent checks, beyond ordinary unit tests of individual functions:
    checked numerically rather than assumed from documentation.
 2. **Independent brute-force oracle** (`tests/test_branch_and_price.py`): a
    bitmask dynamic program over feasible-route subsets -- an algorithm that
-   shares no code with column generation or label-setting -- computes the
-   true optimum for small instances (`n <= 6`). Branch-and-Price matches it
-   exactly on every tested Solomon instance class (clustered `c101`, random
-   `r101`, mixed `rc101`).
+   shares no code with column generation or label-setting -- computes both
+   the plain optimum and the lexicographic (vehicles, then distance) optimum
+   for small instances (`n <= 6`). Branch-and-Price and `solve_lexicographic`
+   match it exactly on every tested Solomon instance class (clustered
+   `c101`, random `r101`, mixed `rc101`).
+3. **Stabilization non-interference**: the same instances solved with
+   `stabilization_alpha=0` and `0.7` reach the identical certified optimum,
+   confirming dual smoothing (Section 6) is a pure acceleration.
 
-Run `pytest` to reproduce both.
+Run `pytest` to reproduce all three (30+ tests, ~1-2 minutes).
 
-## 7. Computational results
+## 9. Computational results
 
 Generated with `python -m vrptw_cg.benchmark --instances c101 c201 r101 r201
 rc101 rc201 --customer-counts 10 25 --time-limit 60`, HiGHS backend, default
@@ -207,7 +264,7 @@ benchmark pages linked in `README.md`) and reports `reference_gap_percent`
 alongside the proven `gap_percent` -- keeping the "did we match the
 literature" claim auditable rather than asserted.
 
-## 8. Known limitations and future work
+## 10. Known limitations and future work
 
 * **Performance.** The label-setting pricing algorithm is pure Python; it is
   correct and reasonably fast at Solomon scale (`n <= 50`, see results
@@ -219,13 +276,17 @@ literature" claim auditable rather than asserted.
   cycle it would need to break involves customers outside every relevant
   neighbor set; branch-and-price's arc and Ryan-Foster branching still
   converge to the correct integer optimum regardless (verified in Section
-  6), but the root LP bound may be marginally looser than a full bucket-graph
+  8), but the root LP bound may be marginally looser than a full bucket-graph
   implementation's.
+* **Stabilization center reset per node.** The dual smoothing center
+  (Section 6) is currently reset at the start of every branch-and-price
+  node rather than warm-started from the parent; this is the simpler,
+  unambiguously-correct choice, at the cost of some avoidable pricing calls
+  deep in the tree.
 * Extensions considered but out of scope here (see
-  `GAP_ANALYSIS_AND_ROADMAP.md` for the full list with priorities): a
-  two-phase lexicographic (vehicles-then-distance) objective, ML/GNN-guided
-  arc pruning for the pricing graph, Electric-VRPTW, and real road-network
-  distance matrices.
+  `GAP_ANALYSIS_AND_ROADMAP.md` for the full list with priorities):
+  ML/GNN-guided arc pruning for the pricing graph, Electric-VRPTW, and real
+  road-network distance matrices.
 
 ## References
 

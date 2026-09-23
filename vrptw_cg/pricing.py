@@ -68,6 +68,7 @@ def solve_pricing(instance, duals_customers: np.ndarray, dual_fleet: float,
                    arc_required_prev: Optional[dict] = None,
                    pair_together: Optional[frozenset] = None,
                    pair_apart: Optional[frozenset] = None,
+                   arc_cost: Optional[np.ndarray] = None,
                    max_routes: int = 25,
                    max_labels: int = 200_000) -> PricingResult:
     """Label-setting ng-route pricing.
@@ -88,9 +89,18 @@ def solve_pricing(instance, duals_customers: np.ndarray, dual_fleet: float,
     "customer q is visited later in this same route" cannot be decided from
     an intermediate label without extra bookkeeping; correctness is
     unaffected, only some dominance pruning opportunities are missed.
+
+    ``arc_cost`` decouples the *objective* from travel time: it defaults to
+    the instance's distance matrix (the normal "minimize distance" case),
+    but ``branch_and_price.solve_lexicographic`` passes an all-zero matrix
+    for the phase-1 "minimize vehicle count" master, where every route costs
+    exactly 1 regardless of length. Feasibility (capacity, time windows)
+    always uses the real distance/time matrix ``instance.d`` -- only the
+    reduced-cost bookkeeping uses ``arc_cost``.
     """
     n = instance.n
     d = instance.d
+    cost_matrix = d if arc_cost is None else arc_cost
     a, b = instance.a, instance.b
     q = instance.q
     Q = instance.Q
@@ -149,7 +159,7 @@ def solve_pricing(instance, duals_customers: np.ndarray, dual_fleet: float,
             if new_time > b[j] + 1e-9:
                 continue
 
-            new_cost = label.cost + (d[i, j] - pi[i])
+            new_cost = label.cost + (cost_matrix[i, j] - pi[i])
             new_memory = (label.memory & N.get(j, frozenset())) | {j} if j <= n \
                 else frozenset()
             new_label = Label(j, new_cost, new_load, new_time, new_memory,
