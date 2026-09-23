@@ -25,3 +25,9 @@ vrptw-cg-benchmark = "vrptw_cg.benchmark:main"
 
 [tool.setuptools.packages.find]
 include = ["vrptw_cg*"]
+
+[tool.pytest.ini_options]
+# Without this, a bare `pytest` invocation (as opposed to `python -m pytest`,
+# which always prepends the current directory to sys.path) cannot find the
+# vrptw_cg package unless it has been pip-installed first -- this bit CI.
+pythonpath = ["."]
