@@ -179,6 +179,10 @@ docs; none of it exists upstream):
 * the test suite, including the independent brute-force oracle;
 * the benchmark results and the technical report.
 
+**Development note:** the code in `vrptw_cg/`, the tests, and the docs were
+written with the assistance of an AI coding assistant (Claude); the
+repository owner directed the work and reviews the results.
+
 **Not done:** no comparison against literature best-known values, PyVRP, or
 VRPSolverEasy; only 25-customer-or-smaller instances (plus one 50-customer
 run) were benchmarked; the pricing is pure Python and not competitive with
