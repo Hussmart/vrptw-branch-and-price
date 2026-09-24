@@ -10,15 +10,16 @@ built around **Branch-and-Price**: Dantzig-Wolfe column generation with an
 layer that closes the integrality gap and *proves* optimality (not just a
 good heuristic number).
 
-This started as a fork of
+**This is a fork.** The upstream project,
 [`SimoneRichetti/VRPTW-Column-Generation`](https://github.com/SimoneRichetti/VRPTW-Column-Generation),
-which solved only the LP relaxation of the set-partitioning master problem.
-The original code is preserved under [`legacy/`](legacy/); everything under
-[`vrptw_cg/`](vrptw_cg/) is a new implementation. See
-[`GAP_ANALYSIS_AND_ROADMAP.md`](GAP_ANALYSIS_AND_ROADMAP.md) for a detailed,
-file-by-file account of what changed and why, and
-[`docs/REPORT.md`](docs/REPORT.md) for the full technical writeup
-(formulation, algorithms, complexity, and validation).
+is by Simone Richetti and solves only the LP relaxation of the
+set-partitioning master problem. See
+[Provenance: upstream vs. this fork](#provenance-upstream-vs-this-fork)
+below for exactly what is reused and what was added.
+[`GAP_ANALYSIS_AND_ROADMAP.md`](GAP_ANALYSIS_AND_ROADMAP.md) has the
+file-by-file analysis of the upstream code and
+[`docs/REPORT.md`](docs/REPORT.md) the technical writeup (formulation,
+algorithms, validation).
 
 <p align="center">
   <img src="results/c101-25customers-routes.png" alt="Example optimal solution on Solomon c101, 25 customers" width="560">
@@ -144,6 +145,44 @@ literature-standard lexicographic objective is forced to 1 vehicle at a
 *higher* cost of 297.00 -- see `docs/REPORT.md` Section 9 for the full
 comparison and discussion, including the one case (`rc201`/25, 671.7s) where
 proving the minimum feasible fleet size was the computational bottleneck.
+
+## Provenance: upstream vs. this fork
+
+Upstream (kept unmodified in [`legacy/`](legacy/), commit `3e4a681`)
+provides the Solomon instance files, the node convention (depot duplicated
+as nodes `0` and `n+1`, integer-rounded Euclidean distances), a
+column-generation loop over a set-partitioning master, a non-elementary
+resource-indexed shortest-path pricing DP, the IMPACT insertion heuristic
+(Ioannou et al., 2001), a Desrochers-style time-window reduction, and a
+greedy set-cover rounding step.
+
+**Reused from upstream, ported into `vrptw_cg/` (not original to this fork):**
+the Solomon instance files and parsing convention (`data.py`), the
+time-window reduction (`data.py::_reduce_time_windows`), and the IMPACT
+heuristic (`heuristics.py::impact_construction`, restructured but the same
+algorithm). `heuristics.py::greedy_set_cover` re-implements upstream's
+cover/cost rounding idea and is not used by the exact solver.
+
+**Added in this fork** (about 1,500 lines in `vrptw_cg/`, plus tests and
+docs; none of it exists upstream):
+
+* the branch-and-bound layer that makes it Branch-and-Price:
+  vehicle-count, arc, and Ryan-Foster branching, best-first search, and
+  bound pruning (`branch_and_price.py`);
+* ng-route relaxation label-setting pricing with dominance, replacing
+  upstream's non-elementary DP (`pricing.py`);
+* a HiGHS (SciPy) master problem with artificial variables and a
+  fleet-size window, replacing the Gurobi-only master (`master.py`);
+* the lexicographic vehicles-then-distance objective (`solve_lexicographic`);
+* dual-value stabilization;
+* the CLI, batch benchmark script, plotting, packaging, and CI;
+* the test suite, including the independent brute-force oracle;
+* the benchmark results and the technical report.
+
+**Not done:** no comparison against literature best-known values, PyVRP, or
+VRPSolverEasy; only 25-customer-or-smaller instances (plus one 50-customer
+run) were benchmarked; the pricing is pure Python and not competitive with
+C++ solvers at scale.
 
 ## Why this is different from the original project
 
