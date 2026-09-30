@@ -2,22 +2,13 @@
   "instance": "c101",
   "customers": 25,
   "backend": "highs",
+  "objective": "distance",
   "status": "optimal",
   "cost": 192.0,
   "lower_bound": 192.0,
   "gap_percent": 0.0,
   "vehicles_used": 3,
   "routes": [
-    [
-      0,
-      20,
-      24,
-      25,
-      23,
-      22,
-      21,
-      26
-    ],
     [
       0,
       13,
@@ -28,6 +19,16 @@
       16,
       14,
       12,
+      26
+    ],
+    [
+      0,
+      20,
+      24,
+      25,
+      23,
+      22,
+      21,
       26
     ],
     [
@@ -47,6 +48,6 @@
     ]
   ],
   "nodes_explored": 1,
-  "columns_generated": 2144,
-  "elapsed_seconds": 26.247720956802368
+  "columns_generated": 541,
+  "elapsed_seconds": 6.292310953140259
 }

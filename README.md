@@ -65,7 +65,7 @@ Status: optimal
 Best solution cost: 192.00
 Proven lower bound: 192.00 (gap 0.000%)
 Vehicles used: 3
-Time: 26.8s (limit 180s)
+Time: 6.3s (limit 180s per phase)
 ```
 
 The standard Solomon-benchmark objective (minimize the fleet size first,
@@ -81,7 +81,7 @@ Batch benchmark across the Solomon suite:
 python -m vrptw_cg.benchmark --instances c101 r101 rc101 --customer-counts 10 25
 ```
 
-Run the test suite (34 tests, ~20 seconds, including the end-to-end
+Run the test suite (37 tests, ~20 seconds, including the end-to-end
 brute-force validation):
 
 ```bash

@@ -223,38 +223,54 @@ Three independent checks, beyond ordinary unit tests of individual functions:
    `stabilization_alpha=0` and `0.7` reach the identical certified optimum,
    confirming dual smoothing (Section 6) is a pure acceleration.
 
-Run `pytest` to reproduce all three (34 tests, ~20 seconds).
+Run `pytest` to reproduce all three (37 tests, ~20 seconds).
 
 ## 9. Computational results
 
+**Correction (service times).** Earlier versions of this report came from
+a model that ignored the Solomon service times (Section 1), inherited from
+the upstream code. Those numbers were optima of an easier problem than the
+VRPTW, and some of their routes miss a time window once service is counted
+(on `r101`/25, 3 of the 6 reported routes). Every number below comes from
+the corrected model.
+
 Generated with `python -m vrptw_cg.benchmark --instances c101 c201 r101 r201
 rc101 rc201 --customer-counts 10 25 --time-limit 60`, HiGHS backend, default
-`k=8` ng-route neighborhoods, on the machine used for development (no
-special hardware). Full machine-readable output: `results/benchmark.csv`.
+`k=8` ng-route neighborhoods, on a 4-core cloud container. `rc101`/25 did not
+close its gap within 60 seconds (incumbent 571.00, lower bound 432.00), so
+its row comes from a rerun of that one instance with `--time-limit 900`.
+Full machine-readable output: `results/benchmark.csv`.
 
 | instance | customers | status | cost | lower bound | gap | vehicles | nodes explored | columns generated | time (s) |
 |---|---|---|---|---|---|---|---|---|---|
-| c101 | 10 | optimal | 59.00 | 59.00 | 0.000% | 1 | 1 | 149 | 0.2 |
-| c101 | 25 | optimal | 192.00 | 192.00 | 0.000% | 3 | 1 | 2144 | 26.3 |
-| c201 | 10 | optimal | 153.00 | 153.00 | 0.000% | 2 | 1 | 113 | 0.2 |
-| c201 | 25 | optimal | 217.00 | 217.00 | 0.000% | 2 | 1 | 2586 | 24.4 |
-| r101 | 10 | optimal | 253.00 | 253.00 | 0.000% | 3 | 1 | 41 | 0.0 |
-| r101 | 25 | optimal | 580.00 | 580.00 | 0.000% | 6 | 5 | 284 | 0.9 |
-| r201 | 10 | optimal | 253.00 | 253.00 | 0.000% | 2 | 7 | 267 | 0.6 |
-| r201 | 25 | optimal | 462.00 | 462.00 | 0.000% | 4 | 3 | 931 | 34.0 |
-| rc101 | 10 | optimal | 184.00 | 184.00 | 0.000% | 2 | 1 | 148 | 0.4 |
-| rc101 | 25 | optimal | 356.00 | 356.00 | 0.000% | 3 | 1 | 763 | 4.4 |
-| rc201 | 10 | optimal | 184.00 | 184.00 | 0.000% | 2 | 1 | 135 | 0.3 |
-| rc201 | 25 | optimal | 356.00 | 356.00 | 0.000% | 3 | 1 | 1329 | 24.8 |
+| c101 | 10 | optimal | 59.00 | 59.00 | 0.000% | 1 | 1 | 84 | 0.3 |
+| c101 | 25 | optimal | 192.00 | 192.00 | 0.000% | 3 | 1 | 541 | 5.6 |
+| c201 | 10 | optimal | 153.00 | 153.00 | 0.000% | 2 | 1 | 73 | 0.4 |
+| c201 | 25 | optimal | 217.00 | 217.00 | 0.000% | 2 | 1 | 1018 | 8.2 |
+| r101 | 10 | optimal | 269.00 | 269.00 | 0.000% | 4 | 11 | 50 | 0.9 |
+| r101 | 25 | optimal | 616.00 | 616.00 | 0.000% | 8 | 1 | 111 | 0.4 |
+| r201 | 10 | optimal | 253.00 | 253.00 | 0.000% | 2 | 7 | 212 | 1.9 |
+| r201 | 25 | optimal | 465.00 | 465.00 | 0.000% | 4 | 3 | 964 | 908.9 |
+| rc101 | 10 | optimal | 187.00 | 187.00 | 0.000% | 2 | 1 | 88 | 0.5 |
+| rc101 | 25 | optimal | 461.00 | 461.00 | 0.000% | 4 | 221 | 1017 | 102.1 |
+| rc201 | 10 | optimal | 184.00 | 184.00 | 0.000% | 2 | 1 | 104 | 0.6 |
+| rc201 | 25 | optimal | 358.00 | 358.00 | 0.000% | 3 | 1 | 709 | 18.3 |
 
-Every instance across all three Solomon classes (clustered `c`, random `r`,
-mixed `rc`, both narrow "1" and wide "2" time-window variants) is solved to a
-*certified* optimum within the 60-second budget. Most root LP relaxations are
-already integral (`nodes_explored = 1`); `r201/25` and `r101/25` are the only
-cases here that actually require branching, confirming the branch-and-price
-layer is exercised and correct, not just idle. A separate run on `r101` with
-50 customers also reached a certified optimum (cost 935.00) in 2.0 seconds.
-Full raw output: `results/benchmark.csv`.
+Every instance is solved to a *certified* optimum. Most root LP relaxations
+are already integral (`nodes_explored = 1`); `r101`/10, `r201`/10, `r201`/25
+and `rc101`/25 need branching, and `rc101`/25 needs 221 nodes.
+
+The time limit is checked only between branch-and-price nodes, so a single
+slow node can overrun it: `r201`/25 finished at 908.9 seconds under a
+60-second limit. Most of that time is spent in nodes where branching makes
+the restricted master infeasible without its artificial variables. Their
+large penalty costs produce very large duals, and every pricing call then
+has to extend tens of thousands of labels. Enforcing the limit inside
+column generation would need care, because a node whose column generation
+stops early has no valid lower bound.
+
+A separate run on `r101` with 50 customers also reached a certified optimum
+(cost 1031.00, 12 vehicles) in 2.5 seconds.
 
 `gap_percent` is `(cost - lower_bound) / cost`; `0.000%` means the branch-
 and-price tree was fully explored and the solution is a certified integer
