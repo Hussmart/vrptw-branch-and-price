@@ -81,7 +81,7 @@ Batch benchmark across the Solomon suite:
 python -m vrptw_cg.benchmark --instances c101 r101 rc101 --customer-counts 10 25
 ```
 
-Run the test suite (31 tests, ~10 seconds, including the end-to-end
+Run the test suite (34 tests, ~20 seconds, including the end-to-end
 brute-force validation):
 
 ```bash
@@ -162,6 +162,12 @@ time-window reduction (`data.py::_reduce_time_windows`), and the IMPACT
 heuristic (`heuristics.py::impact_construction`, restructured but the same
 algorithm). `heuristics.py::greedy_set_cover` re-implements upstream's
 cover/cost rounding idea and is not used by the exact solver.
+
+Upstream never read the `SERVICE-TIME` column of the Solomon files, so its
+model (and this fork's results before the fix) solved an easier problem
+than the real VRPTW. This fork now includes service times in every
+time-window check; see `docs/REPORT.md` Section 9 for the corrected
+numbers.
 
 **Added in this fork** (about 1,500 lines in `vrptw_cg/`, plus tests and
 docs; none of it exists upstream):

@@ -8,8 +8,14 @@ customer exactly once, subject to:
 
 * **Capacity**: the total demand served by a route cannot exceed vehicle
   capacity `Q`.
-* **Time windows**: a vehicle must arrive at customer `i` within
+* **Time windows**: service at customer `i` must start within
   `[a_i, b_i]`; arriving early means waiting until `a_i`.
+* **Service times**: serving customer `i` takes `s_i` time units (90 on the
+  Solomon C instances, 10 on R and RC). A vehicle that starts serving `i` at
+  time `T` reaches `j` at `T + s_i + d_ij`. The code precomputes this as the
+  travel-time matrix `t_ij = s_i + d_ij` (`Instance.t`) and uses it in every
+  time-window check (pricing, time-window reduction, the IMPACT heuristic,
+  and the brute-force oracle). The objective uses distance `d_ij` only.
 * **Fleet size**: at most `K` vehicles are available.
 
 Node `0` and node `n+1` both represent the depot (route start and end copies
@@ -217,7 +223,7 @@ Three independent checks, beyond ordinary unit tests of individual functions:
    `stabilization_alpha=0` and `0.7` reach the identical certified optimum,
    confirming dual smoothing (Section 6) is a pure acceleration.
 
-Run `pytest` to reproduce all three (31 tests, ~10 seconds).
+Run `pytest` to reproduce all three (34 tests, ~20 seconds).
 
 ## 9. Computational results
 

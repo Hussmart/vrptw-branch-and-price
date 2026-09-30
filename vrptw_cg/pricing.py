@@ -95,12 +95,15 @@ def solve_pricing(instance, duals_customers: np.ndarray, dual_fleet: float,
     but ``branch_and_price.solve_lexicographic`` passes an all-zero matrix
     for the phase-1 "minimize vehicle count" master, where every route costs
     exactly 1 regardless of length. Feasibility (capacity, time windows)
-    always uses the real distance/time matrix ``instance.d`` -- only the
-    reduced-cost bookkeeping uses ``arc_cost``.
+    always uses the instance's real travel times -- only the reduced-cost
+    bookkeeping uses ``arc_cost``.
+
+    Label times are start-of-service times, so extending i -> j uses the
+    travel-time matrix ``instance.t`` (service time at i plus distance).
     """
     n = instance.n
-    d = instance.d
-    cost_matrix = d if arc_cost is None else arc_cost
+    t = instance.t
+    cost_matrix = instance.d if arc_cost is None else arc_cost
     a, b = instance.a, instance.b
     q = instance.q
     Q = instance.Q
@@ -154,7 +157,7 @@ def solve_pricing(instance, duals_customers: np.ndarray, dual_fleet: float,
             new_load = label.load + (q[j] if j <= n else 0.0)
             if new_load > Q + 1e-9:
                 continue
-            arrival = label.time + d[i, j]
+            arrival = label.time + t[i, j]
             new_time = max(arrival, a[j])
             if new_time > b[j] + 1e-9:
                 continue

@@ -9,8 +9,13 @@ Node convention (kept identical to the original implementation so that the
 
 All distances are Euclidean, rounded to the nearest integer, which is the
 convention used by exact-method papers on the Solomon benchmark (see
-Desrochers, Desrosiers & Solomon, 1992) so that travel time and travel cost
-can share the same numeric value.
+Desrochers, Desrosiers & Solomon, 1992).
+
+Every Solomon customer also has a service time (90 on the C instances, 10 on
+the R and RC instances). A vehicle that starts serving customer i at time T
+can start serving j no earlier than T + s[i] + d[i, j]. That quantity is
+precomputed as the travel-time matrix ``t``, and every time-window check
+uses ``t``; ``d`` is only the objective (distance).
 """
 from __future__ import annotations
 
@@ -40,7 +45,9 @@ class Instance:
     b: np.ndarray                # due date  (post time-window reduction if requested)
     a_raw: np.ndarray            # original ready time, before reduction
     b_raw: np.ndarray            # original due date, before reduction
-    d: np.ndarray                # (n+2) x (n+2) integer distance/time matrix
+    d: np.ndarray                # (n+2) x (n+2) integer distance matrix (the cost)
+    s: np.ndarray                # service time, length n+2 (0 at both depot copies)
+    t: np.ndarray                # (n+2) x (n+2) travel time, t[i, j] = s[i] + d[i, j]
     neighbors: dict = field(default_factory=dict)  # ng-route neighbor sets
 
     @property
@@ -110,16 +117,19 @@ def load_instance(instance_name: str, n_customers: int,
     q = np.array([int(r["DEMAND"]) for r in rows], dtype=float)
     a_raw = np.array([int(r["READY-TIME"]) for r in rows], dtype=float)
     b_raw = np.array([int(r["DUE-DATE"]) for r in rows], dtype=float)
+    s = np.array([int(r["SERVICE-TIME"]) for r in rows], dtype=float)
+    s[0] = s[-1] = 0.0
 
     d = _distance_matrix(x, y)
+    t = s[:, None] + d
 
     if reduce_time_windows:
-        a, b = _reduce_time_windows(n_customers, d, a_raw, b_raw)
+        a, b = _reduce_time_windows(n_customers, t, a_raw, b_raw)
     else:
         a, b = a_raw.copy(), b_raw.copy()
 
     inst = Instance(name=instance_name, n=n_customers, K=K, Q=Q, x=x, y=y,
-                     q=q, a=a, b=b, a_raw=a_raw, b_raw=b_raw, d=d)
+                     q=q, a=a, b=b, a_raw=a_raw, b_raw=b_raw, d=d, s=s, t=t)
     inst.build_neighbors(k=neighbor_k)
     return inst
 
@@ -134,11 +144,14 @@ def _distance_matrix(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return d
 
 
-def _reduce_time_windows(n: int, d: np.ndarray, ready: np.ndarray,
+def _reduce_time_windows(n: int, t: np.ndarray, ready: np.ndarray,
                           due: np.ndarray):
     """Desrochers-style time-window tightening (Desrochers, Desrosiers &
     Solomon, 1992, Prop. 3). Kept from the original implementation: it is a
     correct and standard exact-method preprocessing step, not a heuristic.
+
+    ``t`` must be the travel-time matrix (service time included), not the
+    distance matrix: the rules bound *start of service* times.
     """
     a = ready.copy()
     b = due.copy()
@@ -147,18 +160,18 @@ def _reduce_time_windows(n: int, d: np.ndarray, ready: np.ndarray,
         updated = False
         for k in range(1, n + 1):
             min_arr_pred = min([b[k],
-                                 min(a[i] + d[i, k] for i in range(n + 1) if i != k)])
+                                 min(a[i] + t[i, k] for i in range(n + 1) if i != k)])
             min_arr_next = min([b[k],
-                                 min(a[j] - d[k, j] for j in range(1, n + 2) if j != k)])
+                                 min(a[j] - t[k, j] for j in range(1, n + 2) if j != k)])
             new_a = max([a[k], min_arr_pred, min_arr_next])
             if new_a != a[k]:
                 updated = True
             a[k] = new_a
 
             max_dep_pred = max([a[k],
-                                 max(b[i] + d[i, k] for i in range(n + 1) if i != k)])
+                                 max(b[i] + t[i, k] for i in range(n + 1) if i != k)])
             max_dep_next = max([a[k],
-                                 max(b[j] - d[k, j] for j in range(1, n + 2) if j != k)])
+                                 max(b[j] - t[k, j] for j in range(1, n + 2) if j != k)])
             new_b = min([b[k], max_dep_pred, max_dep_next])
             if new_b != b[k]:
                 updated = True

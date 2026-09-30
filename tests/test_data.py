@@ -14,6 +14,21 @@ def test_distance_matrix_matches_hand_computed_euclidean():
             assert inst.d[i, j] == expected
 
 
+def test_service_times_are_read_and_zero_at_the_depot():
+    c = load_instance("c101", 5, reduce_time_windows=False)
+    r = load_instance("r101", 5, reduce_time_windows=False)
+    assert c.s[0] == c.s[-1] == 0 and r.s[0] == r.s[-1] == 0
+    assert np.all(c.s[1:-1] == 90)
+    assert np.all(r.s[1:-1] == 10)
+
+
+def test_travel_time_is_service_time_plus_distance():
+    inst = load_instance("c101", 5, reduce_time_windows=False)
+    for i in range(inst.num_nodes):
+        for j in range(inst.num_nodes):
+            assert inst.t[i, j] == inst.s[i] + inst.d[i, j]
+
+
 def test_depot_is_duplicated_with_identical_coordinates():
     inst = load_instance("c101", 5, reduce_time_windows=False)
     assert inst.x[0] == inst.x[-1]
