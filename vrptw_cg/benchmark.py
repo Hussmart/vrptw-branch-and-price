@@ -50,10 +50,10 @@ def run_benchmark(instances, customer_counts, backend="highs", time_limit=120.0,
             t0 = time.time()
             if objective == "vehicles-then-distance":
                 lex = solve_lexicographic(inst, backend=backend, time_limit=time_limit)
-                result, vehicles = lex.phase2, lex.vehicles
+                result, vehicles, status = lex.phase2, lex.vehicles, lex.status
             else:
                 result = BranchAndPrice(inst, backend=backend, time_limit=time_limit).solve()
-                vehicles = len(result.incumbent_routes)
+                vehicles, status = len(result.incumbent_routes), result.status
             elapsed = time.time() - t0
 
             gap = ((result.incumbent_cost - result.lower_bound) / result.incumbent_cost * 100
@@ -62,7 +62,7 @@ def run_benchmark(instances, customer_counts, backend="highs", time_limit=120.0,
             ref_gap = ((result.incumbent_cost - ref_val) / ref_val * 100) if ref_val else None
 
             row = {
-                "instance": name, "customers": n, "status": result.status,
+                "instance": name, "customers": n, "status": status,
                 "cost": round(result.incumbent_cost, 2),
                 "lower_bound": round(result.lower_bound, 2),
                 "gap_percent": round(gap, 3),

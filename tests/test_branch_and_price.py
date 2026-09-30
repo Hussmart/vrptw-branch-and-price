@@ -6,10 +6,12 @@ one's internal consistency -- this is the test to point to when defending
 the implementation.
 """
 from itertools import permutations
+from types import SimpleNamespace
 
 import pytest
 
-from vrptw_cg.branch_and_price import BranchAndPrice, solve_lexicographic
+from vrptw_cg.branch_and_price import (BranchAndPrice, LexicographicResult,
+                                       solve_lexicographic)
 from vrptw_cg.data import load_instance
 
 
@@ -174,3 +176,17 @@ def test_stabilization_does_not_change_the_optimal_answer(instance_name, n):
 
     assert baseline.status == stabilized.status == "optimal"
     assert stabilized.incumbent_cost == pytest.approx(baseline.incumbent_cost, abs=1e-6)
+
+
+@pytest.mark.parametrize("phase1, phase2, expected", [
+    ("optimal", "optimal", "optimal"),
+    ("feasible", "optimal", "feasible"),
+    ("optimal", "feasible", "feasible"),
+])
+def test_lexicographic_status_needs_both_phases_proven(phase1, phase2, expected):
+    # If phase 1 stops at its time limit, K* is only the best fleet size
+    # found so far, so a proven phase-2 optimum must not be reported as the
+    # lexicographic optimum.
+    result = LexicographicResult(5, 461.0, [], SimpleNamespace(status=phase1),
+                                 SimpleNamespace(status=phase2))
+    assert result.status == expected

@@ -421,6 +421,15 @@ class LexicographicResult:
     phase1: BPResult
     phase2: BPResult
 
+    @property
+    def status(self) -> str:
+        """"optimal" only when both phases finished with a proof. If phase 1
+        stopped early, ``vehicles`` is just the best fleet size found, not
+        the proven minimum, so phase 2's optimum is conditional on it."""
+        if self.phase1.status == "optimal" and self.phase2.status == "optimal":
+            return "optimal"
+        return "feasible"
+
 
 def solve_lexicographic(instance, backend: str = "highs", time_limit: float = 300.0,
                          node_limit: int = 3000, **kwargs) -> LexicographicResult:
