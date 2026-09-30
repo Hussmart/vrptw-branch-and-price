@@ -8,8 +8,14 @@ customer exactly once, subject to:
 
 * **Capacity**: the total demand served by a route cannot exceed vehicle
   capacity `Q`.
-* **Time windows**: a vehicle must arrive at customer `i` within
+* **Time windows**: service at customer `i` must start within
   `[a_i, b_i]`; arriving early means waiting until `a_i`.
+* **Service times**: serving customer `i` takes `s_i` time units (90 on the
+  Solomon C instances, 10 on R and RC). A vehicle that starts serving `i` at
+  time `T` reaches `j` at `T + s_i + d_ij`. The code precomputes this as the
+  travel-time matrix `t_ij = s_i + d_ij` (`Instance.t`) and uses it in every
+  time-window check (pricing, time-window reduction, the IMPACT heuristic,
+  and the brute-force oracle). The objective uses distance `d_ij` only.
 * **Fleet size**: at most `K` vehicles are available.
 
 Node `0` and node `n+1` both represent the depot (route start and end copies
@@ -217,38 +223,54 @@ Three independent checks, beyond ordinary unit tests of individual functions:
    `stabilization_alpha=0` and `0.7` reach the identical certified optimum,
    confirming dual smoothing (Section 6) is a pure acceleration.
 
-Run `pytest` to reproduce all three (31 tests, ~10 seconds).
+Run `pytest` to reproduce all three (37 tests, ~20 seconds).
 
 ## 9. Computational results
 
+**Correction (service times).** Earlier versions of this report came from
+a model that ignored the Solomon service times (Section 1), inherited from
+the upstream code. Those numbers were optima of an easier problem than the
+VRPTW, and some of their routes miss a time window once service is counted
+(on `r101`/25, 3 of the 6 reported routes). Every number below comes from
+the corrected model.
+
 Generated with `python -m vrptw_cg.benchmark --instances c101 c201 r101 r201
 rc101 rc201 --customer-counts 10 25 --time-limit 60`, HiGHS backend, default
-`k=8` ng-route neighborhoods, on the machine used for development (no
-special hardware). Full machine-readable output: `results/benchmark.csv`.
+`k=8` ng-route neighborhoods, on a 4-core cloud container. `rc101`/25 did not
+close its gap within 60 seconds (incumbent 571.00, lower bound 432.00), so
+its row comes from a rerun of that one instance with `--time-limit 900`.
+Full machine-readable output: `results/benchmark.csv`.
 
 | instance | customers | status | cost | lower bound | gap | vehicles | nodes explored | columns generated | time (s) |
 |---|---|---|---|---|---|---|---|---|---|
-| c101 | 10 | optimal | 59.00 | 59.00 | 0.000% | 1 | 1 | 149 | 0.2 |
-| c101 | 25 | optimal | 192.00 | 192.00 | 0.000% | 3 | 1 | 2144 | 26.3 |
-| c201 | 10 | optimal | 153.00 | 153.00 | 0.000% | 2 | 1 | 113 | 0.2 |
-| c201 | 25 | optimal | 217.00 | 217.00 | 0.000% | 2 | 1 | 2586 | 24.4 |
-| r101 | 10 | optimal | 253.00 | 253.00 | 0.000% | 3 | 1 | 41 | 0.0 |
-| r101 | 25 | optimal | 580.00 | 580.00 | 0.000% | 6 | 5 | 284 | 0.9 |
-| r201 | 10 | optimal | 253.00 | 253.00 | 0.000% | 2 | 7 | 267 | 0.6 |
-| r201 | 25 | optimal | 462.00 | 462.00 | 0.000% | 4 | 3 | 931 | 34.0 |
-| rc101 | 10 | optimal | 184.00 | 184.00 | 0.000% | 2 | 1 | 148 | 0.4 |
-| rc101 | 25 | optimal | 356.00 | 356.00 | 0.000% | 3 | 1 | 763 | 4.4 |
-| rc201 | 10 | optimal | 184.00 | 184.00 | 0.000% | 2 | 1 | 135 | 0.3 |
-| rc201 | 25 | optimal | 356.00 | 356.00 | 0.000% | 3 | 1 | 1329 | 24.8 |
+| c101 | 10 | optimal | 59.00 | 59.00 | 0.000% | 1 | 1 | 84 | 0.3 |
+| c101 | 25 | optimal | 192.00 | 192.00 | 0.000% | 3 | 1 | 541 | 5.6 |
+| c201 | 10 | optimal | 153.00 | 153.00 | 0.000% | 2 | 1 | 73 | 0.4 |
+| c201 | 25 | optimal | 217.00 | 217.00 | 0.000% | 2 | 1 | 1018 | 8.2 |
+| r101 | 10 | optimal | 269.00 | 269.00 | 0.000% | 4 | 11 | 50 | 0.9 |
+| r101 | 25 | optimal | 616.00 | 616.00 | 0.000% | 8 | 1 | 111 | 0.4 |
+| r201 | 10 | optimal | 253.00 | 253.00 | 0.000% | 2 | 7 | 212 | 1.9 |
+| r201 | 25 | optimal | 465.00 | 465.00 | 0.000% | 4 | 3 | 964 | 908.9 |
+| rc101 | 10 | optimal | 187.00 | 187.00 | 0.000% | 2 | 1 | 88 | 0.5 |
+| rc101 | 25 | optimal | 461.00 | 461.00 | 0.000% | 4 | 221 | 1017 | 102.1 |
+| rc201 | 10 | optimal | 184.00 | 184.00 | 0.000% | 2 | 1 | 104 | 0.6 |
+| rc201 | 25 | optimal | 358.00 | 358.00 | 0.000% | 3 | 1 | 709 | 18.3 |
 
-Every instance across all three Solomon classes (clustered `c`, random `r`,
-mixed `rc`, both narrow "1" and wide "2" time-window variants) is solved to a
-*certified* optimum within the 60-second budget. Most root LP relaxations are
-already integral (`nodes_explored = 1`); `r201/25` and `r101/25` are the only
-cases here that actually require branching, confirming the branch-and-price
-layer is exercised and correct, not just idle. A separate run on `r101` with
-50 customers also reached a certified optimum (cost 935.00) in 2.0 seconds.
-Full raw output: `results/benchmark.csv`.
+Every instance is solved to a *certified* optimum. Most root LP relaxations
+are already integral (`nodes_explored = 1`); `r101`/10, `r201`/10, `r201`/25
+and `rc101`/25 need branching, and `rc101`/25 needs 221 nodes.
+
+The time limit is checked only between branch-and-price nodes, so a single
+slow node can overrun it: `r201`/25 finished at 908.9 seconds under a
+60-second limit. Most of that time is spent in nodes where branching makes
+the restricted master infeasible without its artificial variables. Their
+large penalty costs produce very large duals, and every pricing call then
+has to extend tens of thousands of labels. Enforcing the limit inside
+column generation would need care, because a node whose column generation
+stops early has no valid lower bound.
+
+A separate run on `r101` with 50 customers also reached a certified optimum
+(cost 1031.00, 12 vehicles) in 2.5 seconds.
 
 `gap_percent` is `(cost - lower_bound) / cost`; `0.000%` means the branch-
 and-price tree was fully explored and the solution is a certified integer
@@ -256,42 +278,48 @@ optimum, not just a heuristic value.
 
 ### Lexicographic objective on the same instances
 
-Generated with `python -m vrptw_cg.benchmark ... --objective vehicles-then-distance`.
-Full output: `results/benchmark-lexicographic.csv`.
+Generated with `python -m vrptw_cg.benchmark --instances c101 c201 r101 r201
+rc101 rc201 --customer-counts 10 25 --objective vehicles-then-distance`
+(default `--time-limit 120`, per phase). Full output:
+`results/benchmark-lexicographic.csv`.
 
-| instance | customers | status | distance | vehicles (K\*) | time (s) |
-|---|---|---|---|---|---|
-| c101 | 10 | optimal | 59.00 | 1 | 3.1 |
-| c101 | 25 | optimal | 192.00 | 3 | 129.0 |
-| c201 | 10 | optimal | 194.00 | 1 | 1.8 |
-| c201 | 25 | optimal | 297.00 | 1 | 145.3 |
-| r101 | 10 | optimal | 253.00 | 3 | 1.2 |
-| r101 | 25 | optimal | 580.00 | 6 | 26.0 |
-| r201 | 10 | optimal | 254.00 | 1 | 2.5 |
-| r201 | 25 | optimal | 494.00 | 2 | 173.0 |
-| rc101 | 10 | optimal | 184.00 | 2 | 1.8 |
-| rc101 | 25 | optimal | 356.00 | 3 | 9.3 |
-| rc201 | 10 | optimal | 195.00 | 1 | 7.6 |
-| rc201 | 25 | optimal | 422.00 | 2 | 671.7 |
+| instance | customers | status | distance | lower bound | gap | vehicles (K\*) | time (s) |
+|---|---|---|---|---|---|---|---|
+| c101 | 10 | optimal | 59.00 | 59.00 | 0.000% | 1 | 5.8 |
+| c101 | 25 | feasible | 192.00 | 192.00 | 0.000% | 3 | 133.8 |
+| c201 | 10 | optimal | 195.00 | 195.00 | 0.000% | 1 | 4.2 |
+| c201 | 25 | optimal | 217.00 | 217.00 | 0.000% | 2 | 74.1 |
+| r101 | 10 | optimal | 269.00 | 269.00 | 0.000% | 4 | 15.3 |
+| r101 | 25 | optimal | 616.00 | 616.00 | 0.000% | 8 | 22.0 |
+| r201 | 10 | optimal | 254.00 | 254.00 | 0.000% | 1 | 5.1 |
+| r201 | 25 | feasible | 724.00 | 517.67 | 28.499% | 2 | 1331.6 |
+| rc101 | 10 | optimal | 187.00 | 187.00 | 0.000% | 2 | 3.4 |
+| rc101 | 25 | feasible | 461.00 | 461.00 | 0.000% | 5 | 226.3 |
+| rc201 | 10 | optimal | 195.00 | 195.00 | 0.000% | 1 | 5.0 |
+| rc201 | 25 | feasible | 431.00 | 431.00 | 0.000% | 2 | 355.5 |
 
-All twelve are again certified optimal (`gap_percent = 0.000%` on every row,
-omitted from the table above for space). Comparing against the
-distance-only table confirms the two objectives are genuinely different
-problems, not a rounding-level distinction:
+A row is `optimal` only when both phases finished with a proof. Eight of
+the twelve are. The other four stopped in phase 1, so `K*` is the best
+fleet size found rather than the proven minimum:
 
-* **c201/25**: distance-only uses 2 vehicles for a total of 217.00; the
-  lexicographic optimum uses only 1 vehicle, at a *higher* distance of
-  297.00. Minimizing vehicles first can force a worse-distance solution --
-  exactly the tradeoff the two-phase objective exists to make explicit
-  rather than hide.
-* **r201/25**: distance-only uses 4 vehicles (462.00); lexicographic uses 2
-  vehicles (494.00). Same pattern.
-* **rc201/25** took 671.7s, by far the longest run in either table --
-  phase 1 (proving the *minimum feasible fleet size*, a combinatorial
-  feasibility question in its own right) is occasionally much harder than
-  minimizing distance with a generous fleet bound. This is an honest data
-  point, not smoothed over: the two-phase objective is more expensive to
-  compute exactly, not just conceptually different.
+* **`c101`/25, `rc101`/25, `rc201`/25**: phase 2 is proven (gap 0) *for the
+  `K*` shown*, but phase 1 did not prove that fewer vehicles are
+  impossible. `rc101`/25 shows why that matters: phase 1 stopped at 5
+  vehicles, yet the distance-objective run above found a 4-vehicle
+  solution of the same cost, 461.00.
+* **`r201`/25**: phase 1 stopped at 2 vehicles and phase 2 then also hit
+  its limit (incumbent 724.00, lower bound 517.67). With the time limit
+  checked only between nodes, this row took 1331.6 seconds.
+
+Before this was fixed, phase 2's status was reported as the overall one,
+so rows like these were labelled optimal.
+
+The two objectives are different problems, and the certified rows show it:
+on `c201`/10, minimizing distance uses 2 vehicles for 153.00, while the
+lexicographic optimum uses 1 vehicle at a *higher* distance of 195.00.
+`r201`/10 is the same pattern (2 vehicles and 253.00 against 1 vehicle and
+254.00). Proving the minimum fleet size in phase 1 is often the harder
+part; it is where all four unproven rows stopped.
 
 ### On comparing against literature "best-known" values
 
@@ -309,11 +337,14 @@ literature" claim auditable rather than asserted.
 
 ## 10. Known limitations and future work
 
-* **Performance.** The label-setting pricing algorithm is pure Python; it is
-  correct and reasonably fast at Solomon scale (`n <= 50`, see results
-  above) but is not competitive with C++ implementations like PyVRP or
-  VRPSolver/BaPCod at `n` in the hundreds. This is a deliberate scope choice
-  favoring auditability over raw speed.
+* **Performance.** The label-setting pricing algorithm is pure Python. Most
+  instances above solve in seconds, but wide-window instances can take many
+  minutes (`r201`/25: 908.9 s), and it is not competitive with C++
+  implementations like PyVRP or VRPSolver/BaPCod at `n` in the hundreds.
+  This is a deliberate scope choice favoring auditability over raw speed.
+* **Time limit granularity.** The limit is checked between branch-and-price
+  nodes, not inside a node's column generation, so one slow node can overrun
+  it by a wide margin (Section 9).
 * **ng-route vs. full elementarity.** With `k=8` neighbors, ng-route pricing
   can in principle miss some negative-reduced-cost elementary routes if the
   cycle it would need to break involves customers outside every relevant

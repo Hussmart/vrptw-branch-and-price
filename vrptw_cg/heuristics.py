@@ -19,13 +19,16 @@ from .data import route_cost
 B1 = B2 = B3 = 1.0 / 3.0
 
 
-def _insert_node(route, node, position, s, arr, d, a):
+def _insert_node(route, node, position, s, arr, t, a):
+    """Insert ``node`` and recompute arrival (``arr``) and start-of-service
+    (``s``) times from ``position`` on. ``t`` is the travel-time matrix
+    (service time at the origin plus distance)."""
     new_route = route[:position] + [node] + route[position:]
     new_s = s[:position]
     new_arr = arr[:position]
     for i in range(position, len(new_route)):
         prev_s = new_s[i - 1]
-        new_arr.append(prev_s + d[new_route[i - 1], new_route[i]])
+        new_arr.append(prev_s + t[new_route[i - 1], new_route[i]])
         new_s.append(max(new_arr[i], a[new_route[i]]))
     return new_route, new_s, new_arr
 
@@ -37,35 +40,37 @@ def _route_is_feasible(route, a, b, s, q, Q):
                for i in range(len(route)))
 
 
-def _compute_is_iu_ld(pos_u, route, arr, s, a, b, d, j_minus_u):
+def _compute_is_iu_ld(pos_u, route, arr, s, a, b, d, t, j_minus_u):
+    """IMPACT criteria. ``d`` (distance) enters only the cost term c1; every
+    time-slack term uses the travel-time matrix ``t``."""
     u = route[pos_u]
     i, j = route[pos_u - 1], route[pos_u + 1]
     IS = arr[pos_u] - a[u]
     if j_minus_u:
-        IU = sum(max(b[nb] - a[u] - d[u, nb], b[u] - a[nb] - d[u, nb])
+        IU = sum(max(b[nb] - a[u] - t[u, nb], b[u] - a[nb] - t[nb, u])
                   for nb in j_minus_u) / len(j_minus_u)
     else:
         IU = 0.0
     c1 = d[i, u] + d[u, j] - d[i, j]
-    c2 = (b[j] - (arr[pos_u - 1] + d[i, j])) - (b[j] - (arr[pos_u] + d[i, j]))
-    c3 = b[u] - (arr[pos_u - 1] + d[i, u])
+    c2 = (b[j] - (arr[pos_u - 1] + t[i, j])) - (b[j] - (arr[pos_u] + t[i, j]))
+    c3 = b[u] - (arr[pos_u - 1] + t[i, u])
     LD = B1 * c1 + B2 * c2 + B3 * c3
     return IS, IU, LD
 
 
 def impact_construction(instance):
     """Return a list of routes (each a list of node indices, 0 ... n+1)."""
-    n, d, a, b, q, Q = (instance.n, instance.d, instance.a, instance.b,
-                         instance.q, instance.Q)
+    n, d, t, a, b, q, Q = (instance.n, instance.d, instance.t, instance.a,
+                            instance.b, instance.q, instance.Q)
     remaining = list(range(1, n + 1))
     routes = []
 
     while remaining:
         far = max(remaining, key=lambda j: d[0, j])
         route = [0, far, n + 1]
-        arr = [0.0, d[0, far]]
+        arr = [0.0, t[0, far]]
         s = [0.0, max(a[far], arr[1])]
-        arr.append(s[1] + d[far, n + 1])
+        arr.append(s[1] + t[far, n + 1])
         s.append(max(arr[2], a[n + 1]))
         remaining.remove(far)
 
@@ -77,11 +82,11 @@ def impact_construction(instance):
                 best_impact, best_pos = None, None
                 is_list, iu_list, ld_list, positions = [], [], [], []
                 for pos in range(1, len(route)):
-                    new_route, new_s, new_arr = _insert_node(route, u, pos, s, arr, d, a)
+                    new_route, new_s, new_arr = _insert_node(route, u, pos, s, arr, t, a)
                     if _route_is_feasible(new_route, a, b, new_s, q, Q):
                         positions.append(pos)
                         Is, Iu, Ld = _compute_is_iu_ld(pos, new_route, new_arr,
-                                                        new_s, a, b, d, j_minus_u)
+                                                        new_s, a, b, d, t, j_minus_u)
                         is_list.append(Is); iu_list.append(Iu); ld_list.append(Ld)
                 if not positions:
                     feasible.remove(u)
@@ -96,7 +101,7 @@ def impact_construction(instance):
             if not proposals:
                 break
             node_to_insert, insert_pos = proposals[min(proposals)]
-            route, s, arr = _insert_node(route, node_to_insert, insert_pos, s, arr, d, a)
+            route, s, arr = _insert_node(route, node_to_insert, insert_pos, s, arr, t, a)
             feasible.remove(node_to_insert)
             remaining.remove(node_to_insert)
 

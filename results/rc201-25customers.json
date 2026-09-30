@@ -2,9 +2,10 @@
   "instance": "rc201",
   "customers": 25,
   "backend": "highs",
+  "objective": "distance",
   "status": "optimal",
-  "cost": 356.0,
-  "lower_bound": 356.0,
+  "cost": 358.0,
+  "lower_bound": 358.0,
   "gap_percent": 0.0,
   "vehicles_used": 3,
   "routes": [
@@ -28,8 +29,8 @@
       19,
       22,
       20,
-      25,
       24,
+      25,
       26
     ],
     [
@@ -47,6 +48,6 @@
     ]
   ],
   "nodes_explored": 1,
-  "columns_generated": 1329,
-  "elapsed_seconds": 19.397890090942383
+  "columns_generated": 709,
+  "elapsed_seconds": 17.403050899505615
 }

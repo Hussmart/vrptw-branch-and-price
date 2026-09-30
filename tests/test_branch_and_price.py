@@ -6,10 +6,12 @@ one's internal consistency -- this is the test to point to when defending
 the implementation.
 """
 from itertools import permutations
+from types import SimpleNamespace
 
 import pytest
 
-from vrptw_cg.branch_and_price import BranchAndPrice, solve_lexicographic
+from vrptw_cg.branch_and_price import (BranchAndPrice, LexicographicResult,
+                                       solve_lexicographic)
 from vrptw_cg.data import load_instance
 
 
@@ -27,7 +29,7 @@ def _feasible_route_cost(subset, inst):
         prev = 0
         for c in perm:
             cost += inst.d[prev, c]
-            t = max(t + inst.d[prev, c], inst.a[c])
+            t = max(t + inst.t[prev, c], inst.a[c])
             if t > inst.b[c] + 1e-9:
                 ok = False
                 break
@@ -35,7 +37,7 @@ def _feasible_route_cost(subset, inst):
         if not ok:
             continue
         cost += inst.d[prev, n1]
-        t = max(t + inst.d[prev, n1], inst.a[n1])
+        t = max(t + inst.t[prev, n1], inst.a[n1])
         if t > inst.b[n1] + 1e-9:
             continue
         if best is None or cost < best:
@@ -117,14 +119,18 @@ def test_solution_covers_every_customer_exactly_once():
     assert sorted(covered) == list(range(1, inst.n + 1))
 
 
-def test_solution_respects_capacity_and_time_windows():
-    inst = load_instance("r101", 10)
+@pytest.mark.parametrize("name", ["r101", "c101"])
+def test_solution_respects_capacity_and_time_windows(name):
+    # Travel times include service times (90 on c101, 10 on r101). Before
+    # they were modelled, the r101 solution had a route that missed a time
+    # window once service was counted.
+    inst = load_instance(name, 10)
     result = BranchAndPrice(inst, time_limit=60.0, node_limit=1000).solve()
     for route in result.incumbent_routes:
         assert sum(inst.q[c] for c in route[1:-1]) <= inst.Q + 1e-6
         t = inst.a[0]
         for a, b in zip(route[:-1], route[1:]):
-            t = max(t + inst.d[a, b], inst.a[b])
+            t = max(t + inst.t[a, b], inst.a[b])
             assert t <= inst.b[b] + 1e-6
 
 
@@ -170,3 +176,17 @@ def test_stabilization_does_not_change_the_optimal_answer(instance_name, n):
 
     assert baseline.status == stabilized.status == "optimal"
     assert stabilized.incumbent_cost == pytest.approx(baseline.incumbent_cost, abs=1e-6)
+
+
+@pytest.mark.parametrize("phase1, phase2, expected", [
+    ("optimal", "optimal", "optimal"),
+    ("feasible", "optimal", "feasible"),
+    ("optimal", "feasible", "feasible"),
+])
+def test_lexicographic_status_needs_both_phases_proven(phase1, phase2, expected):
+    # If phase 1 stops at its time limit, K* is only the best fleet size
+    # found so far, so a proven phase-2 optimum must not be reported as the
+    # lexicographic optimum.
+    result = LexicographicResult(5, 461.0, [], SimpleNamespace(status=phase1),
+                                 SimpleNamespace(status=phase2))
+    assert result.status == expected

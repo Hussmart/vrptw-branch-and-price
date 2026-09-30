@@ -64,6 +64,7 @@ def run(args=None):
                                    stabilization_alpha=args.stabilization_alpha)
         result = lex.phase2
         vehicles_used = lex.vehicles
+        status = lex.status
         log.info("Phase 1 (minimize vehicles): K* = %d (status %s)",
                   lex.vehicles, lex.phase1.status)
         log.info("Phase 2 (minimize distance with %d vehicles): status %s",
@@ -74,12 +75,13 @@ def run(args=None):
                                  stabilization_alpha=args.stabilization_alpha)
         result = solver.solve()
         vehicles_used = len(result.incumbent_routes)
+        status = result.status
     elapsed = time.time() - t0
 
     gap = (result.incumbent_cost - result.lower_bound) / result.incumbent_cost * 100 \
         if result.incumbent_cost else 0.0
 
-    log.info("Status: %s", result.status)
+    log.info("Status: %s", status)
     log.info("Best solution cost: %.2f", result.incumbent_cost)
     log.info("Proven lower bound: %.2f (gap %.3f%%)", result.lower_bound, gap)
     log.info("Vehicles used: %d", vehicles_used)
@@ -97,7 +99,7 @@ def run(args=None):
         "customers": inst.n,
         "backend": args.backend,
         "objective": args.objective,
-        "status": result.status,
+        "status": status,
         "cost": result.incumbent_cost,
         "lower_bound": result.lower_bound,
         "gap_percent": gap,

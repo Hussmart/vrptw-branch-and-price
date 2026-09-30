@@ -65,7 +65,7 @@ Status: optimal
 Best solution cost: 192.00
 Proven lower bound: 192.00 (gap 0.000%)
 Vehicles used: 3
-Time: 26.8s (limit 180s)
+Time: 6.3s (limit 180s per phase)
 ```
 
 The standard Solomon-benchmark objective (minimize the fleet size first,
@@ -81,7 +81,7 @@ Batch benchmark across the Solomon suite:
 python -m vrptw_cg.benchmark --instances c101 r101 rc101 --customer-counts 10 25
 ```
 
-Run the test suite (31 tests, ~10 seconds, including the end-to-end
+Run the test suite (37 tests, ~20 seconds, including the end-to-end
 brute-force validation):
 
 ```bash
@@ -129,22 +129,26 @@ this a pure acceleration with zero effect on the final answer --
 
 ## Results
 
-Both objectives solve to a **certified optimum** (proven lower bound equals
-the reported cost, `gap_percent = 0.000%`) on all 12 tested Solomon
-instances spanning all three classes (clustered `c`, random `r`, mixed `rc`)
-and both time-window widths ("1" narrow, "2" wide):
+Results on 12 Solomon instances spanning all three classes (clustered `c`,
+random `r`, mixed `rc`) and both time-window widths ("1" narrow, "2"
+wide), with 10 and 25 customers. "Certified" means the proven lower bound
+equals the reported cost:
 
 | objective | instances solved to certified optimum | full data |
 |---|---|---|
 | `distance` | 12 / 12 | [`results/benchmark.csv`](results/benchmark.csv) |
-| `vehicles-then-distance` | 12 / 12 | [`results/benchmark-lexicographic.csv`](results/benchmark-lexicographic.csv) |
+| `vehicles-then-distance` | 8 / 12 (120 s per phase) | [`results/benchmark-lexicographic.csv`](results/benchmark-lexicographic.csv) |
 
-The two objectives are not interchangeable: on `c201`/25 customers,
-minimizing distance alone uses 2 vehicles for a cost of 217.00, while the
-literature-standard lexicographic objective is forced to 1 vehicle at a
-*higher* cost of 297.00 -- see `docs/REPORT.md` Section 9 for the full
-comparison and discussion, including the one case (`rc201`/25, 671.7s) where
-proving the minimum feasible fleet size was the computational bottleneck.
+The four unproven lexicographic rows stopped in phase 1, before proving the
+minimum fleet size. The two objectives are not interchangeable: on
+`c201`/10, minimizing distance alone uses 2 vehicles for 153.00, while the
+literature-standard lexicographic objective uses 1 vehicle at a *higher*
+cost of 195.00. See `docs/REPORT.md` Section 9 for both tables and the
+discussion.
+
+These numbers include the Solomon service times. Versions of this
+repository before that fix ignored them and reported optima of an easier
+problem (see the correction note in `docs/REPORT.md` Section 9).
 
 ## Provenance: upstream vs. this fork
 
@@ -162,6 +166,12 @@ time-window reduction (`data.py::_reduce_time_windows`), and the IMPACT
 heuristic (`heuristics.py::impact_construction`, restructured but the same
 algorithm). `heuristics.py::greedy_set_cover` re-implements upstream's
 cover/cost rounding idea and is not used by the exact solver.
+
+Upstream never read the `SERVICE-TIME` column of the Solomon files, so its
+model (and this fork's results before the fix) solved an easier problem
+than the real VRPTW. This fork now includes service times in every
+time-window check; see `docs/REPORT.md` Section 9 for the corrected
+numbers.
 
 **Added in this fork** (about 1,500 lines in `vrptw_cg/`, plus tests and
 docs; none of it exists upstream):

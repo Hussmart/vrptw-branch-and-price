@@ -19,7 +19,7 @@ def test_impact_construction_routes_are_feasible():
         assert sum(inst.q[c] for c in route[1:-1]) <= inst.Q + 1e-6
         t = inst.a[0]
         for a, b in zip(route[:-1], route[1:]):
-            t = max(t + inst.d[a, b], inst.a[b])
+            t = max(t + inst.t[a, b], inst.a[b])
             assert t <= inst.b[b] + 1e-6
 
 

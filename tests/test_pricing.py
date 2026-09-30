@@ -29,7 +29,7 @@ def test_pricing_routes_are_capacity_and_time_feasible():
         assert load <= inst.Q + 1e-6
         t = inst.a[0]
         for a, b in zip(route[:-1], route[1:]):
-            t = max(t + inst.d[a, b], inst.a[b])
+            t = max(t + inst.t[a, b], inst.a[b])
             assert t <= inst.b[b] + 1e-6
 
 
